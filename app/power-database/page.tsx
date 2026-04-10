@@ -57,7 +57,6 @@ export default function PowerDatabase() {
     const hids = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
     try {
-      // Fetch core info
       const infoResponse = await fetch("https://api.dnaracing.run/fbike/cores/mini_bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -65,7 +64,6 @@ export default function PowerDatabase() {
       });
       const infoResult = await infoResponse.json();
       
-      // Fetch power stats
       const powerResponse = await fetch("https://api.dnaracing.run/fbike/cores/power_bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -77,7 +75,6 @@ export default function PowerDatabase() {
         const coreInfo = infoResult.result;
         const corePower = powerResult.result;
         
-        // Merge data
         const merged = coreInfo.map((core: any) => {
           const power = corePower.find((p: any) => p.hid === core.hid);
           return {
@@ -110,9 +107,9 @@ export default function PowerDatabase() {
   };
 
   const filteredCores = cores.filter(core => {
-    if (core.bike_pwr < minPower) return false;
-    if (core.bike_var < minVar) return false;
-    if (core.bike_adj < minAdj) return false;
+    if ((core.bike_pwr || 0) < minPower) return false;
+    if ((core.bike_var || 0) < minVar) return false;
+    if ((core.bike_adj || 0) < minAdj) return false;
     if (elementFilter && core.element !== elementFilter) return false;
     if (typeFilter && core.type !== typeFilter) return false;
     return true;
@@ -121,8 +118,14 @@ export default function PowerDatabase() {
   const downloadCSV = () => {
     const headers = ["HID", "Name", "Element", "Type", "Gender", "Bike PWR", "Bike VAR", "Bike ADJ"];
     const rows = filteredCores.map(c => [
-      c.hid, c.name, c.element, c.type, c.gender,
-      c.bike_pwr?.toFixed(1), c.bike_var?.toFixed(1), c.bike_adj?.toFixed(1)
+      c.hid, 
+      c.name || "", 
+      c.element || "", 
+      c.type || "", 
+      c.gender || "",
+      (c.bike_pwr || 0).toFixed(1), 
+      (c.bike_var || 0).toFixed(1), 
+      (c.bike_adj || 0).toFixed(1)
     ]);
     
     const csv = [headers, ...rows].map(row => row.join(",")).join("\n");
@@ -140,7 +143,6 @@ export default function PowerDatabase() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
         <div className="mb-8">
           <Link href="/" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -148,12 +150,9 @@ export default function PowerDatabase() {
           </Link>
           
           <h1 className="text-4xl font-bold mb-2">Power Database</h1>
-          <p className="text-muted-foreground">
-            Search and filter power stats across all cores
-          </p>
+          <p className="text-muted-foreground">Search and filter power stats across all cores</p>
         </div>
 
-        {/* Search */}
         <div className="bg-card border border-border rounded-xl p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Search Core Range</h2>
           
@@ -202,7 +201,6 @@ export default function PowerDatabase() {
           )}
         </div>
 
-        {/* Filters */}
         {cores.length > 0 && (
           <div className="bg-card border border-border rounded-xl p-6 mb-8">
             <h2 className="text-xl font-semibold mb-4">Filters</h2>
@@ -290,7 +288,6 @@ export default function PowerDatabase() {
           </div>
         )}
 
-        {/* Results Table */}
         {filteredCores.length > 0 && (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
@@ -317,9 +314,9 @@ export default function PowerDatabase() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">{core.type}</td>
-                      <td className="py-3 px-4 text-center">{core.bike_pwr?.toFixed(1)}%</td>
-                      <td className="py-3 px-4 text-center">{core.bike_var?.toFixed(1)}%</td>
-                      <td className="py-3 px-4 text-center">{core.bike_adj?.toFixed(1)}%</td>
+                      <td className="py-3 px-4 text-center">{(core.bike_pwr || 0).toFixed(1)}%</td>
+                      <td className="py-3 px-4 text-center">{(core.bike_var || 0).toFixed(1)}%</td>
+                      <td className="py-3 px-4 text-center">{(core.bike_adj || 0).toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -334,7 +331,6 @@ export default function PowerDatabase() {
           </div>
         )}
 
-        {/* Empty State */}
         {cores.length === 0 && !error && !loading && (
           <div className="text-center py-12 text-muted-foreground">
             <p>Enter a core ID range above to search the power database</p>

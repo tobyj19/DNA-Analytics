@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Search, Trophy, TrendingUp } from "lucide-react";
 
 interface CoreDetails {
   hid: number;
@@ -22,10 +22,27 @@ interface CoreDetails {
   horse_adj?: number;
 }
 
+interface Race {
+  rid: string;
+  race_name: string;
+  rvmode: string;
+  class: number;
+  pos: number;
+  time: number;
+  gate: number;
+  rgate: number;
+  start_time: string;
+  prize_eth: number;
+  prize_usd: number;
+  fee: number;
+  paytoken: string;
+}
+
 export default function CoreAnalytics() {
   const [coreId, setCoreId] = useState("");
   const [loading, setLoading] = useState(false);
   const [core, setCore] = useState<CoreDetails | null>(null);
+  const [races, setRaces] = useState<Race[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const analyzeCore = async () => {
@@ -40,6 +57,7 @@ export default function CoreAnalytics() {
     }
 
     try {
+      // Fetch core info
       const infoResponse = await fetch("https://api.dnaracing.run/fbike/cores/mini_bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -47,12 +65,21 @@ export default function CoreAnalytics() {
       });
       const infoResult = await infoResponse.json();
       
+      // Fetch power stats
       const powerResponse = await fetch("https://api.dnaracing.run/fbike/cores/power_bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hids: [id] }),
       });
       const powerResult = await powerResponse.json();
+      
+      // Fetch race history
+      const racesResponse = await fetch("https://api.dnaracing.run/fbike/i/hraces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hid: id, limit: 50 }),
+      });
+      const racesResult = await racesResponse.json();
       
       if (infoResult.status === "success" && powerResult.status === "success" && infoResult.result.length > 0) {
         const coreInfo = infoResult.result[0];
@@ -75,6 +102,10 @@ export default function CoreAnalytics() {
           horse_var: power?.power?.horse?.variance?.fill?.per || 0,
           horse_adj: power?.power?.horse?.adjodds?.fill?.per || 0,
         });
+        
+        if (racesResult.status === "success") {
+          setRaces(racesResult.result || []);
+        }
       } else {
         setError("Core not found");
       }
@@ -84,6 +115,13 @@ export default function CoreAnalytics() {
       setLoading(false);
     }
   };
+
+  // Calculate stats from race history
+  const wins = races.filter(r => r.pos === 1).length;
+  const totalRaces = races.length;
+  const winRate = totalRaces > 0 ? ((wins / totalRaces) * 100).toFixed(1) : "0.0";
+  const totalEarnings = races.reduce((sum, r) => sum + (r.prize_eth || 0), 0);
+  const avgPosition = totalRaces > 0 ? (races.reduce((sum, r) => sum + r.pos, 0) / totalRaces).toFixed(1) : "0.0";
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,7 +133,7 @@ export default function CoreAnalytics() {
           </Link>
           
           <h1 className="text-4xl font-bold mb-2">Core Analytics</h1>
-          <p className="text-muted-foreground">Deep dive into individual core performance and stats</p>
+          <p className="text-muted-foreground">Deep dive into core performance and race history</p>
         </div>
 
         {/* Search */}
@@ -130,6 +168,7 @@ export default function CoreAnalytics() {
         {/* Results */}
         {core && (
           <div className="space-y-6">
+            {/* Header */}
             <div className="bg-card border border-border rounded-xl p-6">
               <div className="text-sm text-muted-foreground mb-1">Core #{core.hid}</div>
               <h2 className="text-3xl font-bold mb-3">{core.name || "Unnamed"}</h2>
@@ -140,42 +179,128 @@ export default function CoreAnalytics() {
               </div>
             </div>
 
+            {/* Racing Stats Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Trophy className="w-5 h-5 text-primary" />
+                  <span className="text-sm text-muted-foreground">Win Rate</span>
+                </div>
+                <div className="text-3xl font-bold">{winRate}%</div>
+                <div className="text-xs text-muted-foreground">{wins} / {totalRaces} races</div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                  <span className="text-sm text-muted-foreground">Avg Position</span>
+                </div>
+                <div className="text-3xl font-bold">{avgPosition}</div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-6">
+                <span className="text-sm text-muted-foreground">Total Races</span>
+                <div className="text-3xl font-bold">{totalRaces}</div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-6">
+                <span className="text-sm text-muted-foreground">Earnings</span>
+                <div className="text-3xl font-bold">{totalEarnings.toFixed(2)}</div>
+                <div className="text-xs text-muted-foreground">Total prize pool</div>
+              </div>
+            </div>
+
+            {/* Power Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Bike */}
               <div className="bg-card border border-border rounded-xl p-6">
                 <div className="text-2xl mb-3">🚲 Bike</div>
                 <div className="space-y-2">
-                  <div className="flex justify-between"><span className="text-muted-foreground">PWR</span><span>{core.bike_pwr?.toFixed(1)}%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">VAR</span><span>{core.bike_var?.toFixed(1)}%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">ADJ</span><span>{core.bike_adj?.toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PWR</span><span>{(core.bike_pwr || 0).toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VAR</span><span>{(core.bike_var || 0).toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">ADJ</span><span>{(core.bike_adj || 0).toFixed(1)}%</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Races</span><span>{core.bike_races}</span></div>
                 </div>
               </div>
 
-              {/* Car */}
               <div className="bg-card border border-border rounded-xl p-6">
                 <div className="text-2xl mb-3">🚗 Car</div>
                 <div className="space-y-2">
-                  <div className="flex justify-between"><span className="text-muted-foreground">PWR</span><span>{core.car_pwr?.toFixed(1)}%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">VAR</span><span>{core.car_var?.toFixed(1)}%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">ADJ</span><span>{core.car_adj?.toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PWR</span><span>{(core.car_pwr || 0).toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VAR</span><span>{(core.car_var || 0).toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">ADJ</span><span>{(core.car_adj || 0).toFixed(1)}%</span></div>
                 </div>
               </div>
 
-              {/* Horse */}
               <div className="bg-card border border-border rounded-xl p-6">
                 <div className="text-2xl mb-3">🐴 Horse</div>
                 <div className="space-y-2">
-                  <div className="flex justify-between"><span className="text-muted-foreground">PWR</span><span>{core.horse_pwr?.toFixed(1)}%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">VAR</span><span>{core.horse_var?.toFixed(1)}%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">ADJ</span><span>{core.horse_adj?.toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">PWR</span><span>{(core.horse_pwr || 0).toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VAR</span><span>{(core.horse_var || 0).toFixed(1)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">ADJ</span><span>{(core.horse_adj || 0).toFixed(1)}%</span></div>
                 </div>
               </div>
             </div>
 
+            {/* Race History */}
+            {races.length > 0 && (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                <div className="p-6 border-b border-border">
+                  <h2 className="text-xl font-semibold">Race History</h2>
+                  <p className="text-sm text-muted-foreground">Last {races.length} races</p>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left py-3 px-4 font-medium">Race</th>
+                        <th className="text-center py-3 px-4 font-medium">Mode</th>
+                        <th className="text-center py-3 px-4 font-medium">Class</th>
+                        <th className="text-center py-3 px-4 font-medium">Position</th>
+                        <th className="text-center py-3 px-4 font-medium">Time</th>
+                        <th className="text-center py-3 px-4 font-medium">Prize</th>
+                        <th className="text-left py-3 px-4 font-medium">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {races.slice(0, 20).map((race, idx) => (
+                        <tr key={idx} className="border-t border-border/50 hover:bg-muted/30">
+                          <td className="py-3 px-4 text-sm">{race.race_name}</td>
+                          <td className="py-3 px-4 text-center text-sm">{race.rvmode}</td>
+                          <td className="py-3 px-4 text-center text-sm">{race.class}</td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`px-2 py-1 rounded text-sm ${
+                              race.pos === 1 ? 'bg-yellow-500/20 text-yellow-400' :
+                              race.pos <= 3 ? 'bg-primary/20 text-primary' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {race.pos}/{race.rgate}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center text-sm">{race.time.toFixed(2)}s</td>
+                          <td className="py-3 px-4 text-center text-sm">
+                            {race.prize_eth > 0 ? `${race.prize_eth} ${race.paytoken}` : '-'}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-muted-foreground">
+                            {new Date(race.start_time).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {races.length > 20 && (
+                  <div className="p-4 bg-muted/50 text-center text-sm text-muted-foreground">
+                    Showing first 20 of {races.length} races
+                  </div>
+                )}
+              </div>
+            )}
+
             {core.bike_races === 0 && (
               <div className="bg-muted/50 border border-border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground">💡 This core has no race history. Power stats require racing data.</p>
+                <p className="text-sm text-muted-foreground">💡 This core has no race history yet.</p>
               </div>
             )}
           </div>
